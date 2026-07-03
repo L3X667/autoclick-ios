@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>AutoClick</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --accent: #7c6af7;
+    --accent2: #a78bfa;
+    --green: #22d3a3;
+    --red: #f87171;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --surface: rgba(19,19,28,0.9);
+    --border: rgba(124,106,247,0.25);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; -webkit-touch-callout:none; }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    position:fixed;
+    touch-action:none;
+  }
+
+  body::before {
+    content:'';
+    position:fixed;
+    top:-20%; left:50%;
+    transform:translateX(-50%);
+    width:100vw; height:60vh;
+    background: radial-gradient(circle, rgba(124,106,247,0.1) 0%, transparent 70%);
+    pointer-events:none;
+    z-index:0;
+  }
+
+  #playfield {
+    position:fixed;
+    inset:0;
+    z-index:1;
+  }
+
+  #playfield::before {
+    content:'';
+    position:absolute;
+    inset:0;
+    background-image: radial-gradient(circle, rgba(124,106,247,0.06) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+
+  .topbar {
+    position:fixed;
+    top:0; left:0; right:0;
+    padding: calc(env(safe-area-inset-top) + 10px) 14px 12px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    z-index:20;
+    background: linear-gradient(180deg, rgba(10,10,15,0.95) 0%, rgba(10,10,15,0.7) 70%, transparent 100%);
+  }
+
+  .main-btn {
+    flex:1;
+    padding:14px;
+    border-radius:16px;
+    border:none;
+    font-family:'Space Grotesk', sans-serif;
+    font-size:16px;
+    font-weight:700;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    letter-spacing:0.3px;
+    transition: transform 0.15s;
+  }
+  .main-btn:active { transform:scale(0.96); }
+  .main-btn.start {
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+    color:white;
+    box-shadow: 0 6px 20px rgba(124,106,247,0.4);
+  }
+  .main-btn.stop {
+    background: linear-gradient(135deg, #b91c1c 0%, var(--red) 100%);
+    color:white;
+    box-shadow: 0 6px 20px rgba(248,113,113,0.4);
+  }
+  .pulse-dot {
+    width:9px; height:9px;
+    border-radius:50%;
+    background:white;
+    animation:pulse-dot 1s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%,100% { opacity:1; transform:scale(1); }
+    50% { opacity:0.4; transform:scale(0.6); }
+  }
+
+  .settings-btn {
+    width:48px; height:48px;
+    border-radius:14px;
+    border:1px solid var(--border);
+    background: var(--surface);
+    color:var(--text);
+    font-size:19px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-shrink:0;
+    backdrop-filter: blur(10px);
+  }
+  .settings-btn:active { transform:scale(0.94); }
+
+  .stats-pill {
+    position:fixed;
+    top: calc(env(safe-area-inset-top) + 70px);
+    left:50%;
+    transform:translateX(-50%);
+    background: var(--surface);
+    border:1px solid var(--border);
+    border-radius:100px;
+    padding:8px 18px;
+    display:flex;
+    gap:16px;
+    z-index:19;
+    backdrop-filter: blur(10px);
+    font-family:'Space Mono', monospace;
+    font-size:12px;
+    color:var(--muted);
+  }
+  .stats-pill b { color:var(--accent2); font-weight:700; }
+  .stats-pill .divider { color:rgba(255,255,255,0.15); }
+
+  #target {
+    position:absolute;
+    width:64px; height:64px;
+    transform:translate(-50%,-50%);
+    z-index:15;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    touch-action:none;
+    cursor:grab;
+  }
+  #target .ring {
+    position:absolute;
+    inset:0;
+    border-radius:50%;
+    border:2px solid var(--accent);
+    box-shadow: 0 0 0 6px rgba(124,106,247,0.1), 0 0 24px rgba(124,106,247,0.4);
+  }
+  #target .ring.pulse-ring {
+    animation: ring-pulse 1s ease-out infinite;
+  }
+  @keyframes ring-pulse {
+    0% { transform:scale(0.9); opacity:1; }
+    100% { transform:scale(1.8); opacity:0; }
+  }
+  #target .core {
+    position:relative;
+    width:16px; height:16px;
+    border-radius:50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    box-shadow: 0 0 12px rgba(124,106,247,0.8);
+  }
+  #target.dragging .core {
+    background: var(--green);
+    box-shadow: 0 0 16px rgba(34,211,163,0.8);
+  }
+
+  .target-hint {
+    position:absolute;
+    top:72px;
+    left:50%;
+    transform:translateX(-50%);
+    white-space:nowrap;
+    font-size:10px;
+    color:var(--muted);
+    font-family:'Space Mono', monospace;
+    background:rgba(0,0,0,0.5);
+    padding:3px 8px;
+    border-radius:6px;
+  }
+
+  .ripple {
+    position:absolute;
+    border-radius:50%;
+    border:2px solid var(--accent2);
+    width:20px; height:20px;
+    transform:translate(-50%,-50%) scale(0);
+    animation: ripple-anim 0.5s ease-out forwards;
+    pointer-events:none;
+    z-index:10;
+  }
+  @keyframes ripple-anim {
+    to { transform:translate(-50%,-50%) scale(3); opacity:0; }
+  }
+
+  .empty-hint {
+    position:fixed;
+    top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    text-align:center;
+    color:var(--muted);
+    z-index:5;
+    pointer-events:none;
+    padding:0 40px;
+  }
+  .empty-hint .icon { font-size:36px; margin-bottom:10px; }
+  .empty-hint .txt { font-size:14px; line-height:1.5; }
+
+  .settings-overlay {
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.5);
+    z-index:29;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity 0.25s;
+  }
+  .settings-overlay.open { opacity:1; pointer-events:all; }
+
+  .settings-panel {
+    position:fixed;
+    left:0; right:0; bottom:0;
+    background: #13131c;
+    border-top:1px solid var(--border);
+    border-radius:24px 24px 0 0;
+    padding: 18px 20px calc(env(safe-area-inset-bottom) + 20px);
+    z-index:30;
+    transform:translateY(100%);
+    transition:transform 0.3s cubic-bezier(.2,.9,.3,1);
+  }
+  .settings-panel.open { transform:translateY(0); }
+
+  .panel-handle {
+    width:36px; height:4px;
+    background: var(--border);
+    border-radius:2px;
+    margin: 0 auto 16px;
+  }
+
+  .panel-title {
+    font-size:11px;
+    letter-spacing:2px;
+    color:var(--muted);
+    text-transform:uppercase;
+    margin-bottom:14px;
+    font-family:'Space Mono', monospace;
+  }
+
+  .speed-display {
+    text-align:center;
+    margin-bottom:14px;
+  }
+  .speed-num {
+    font-family:'Space Mono', monospace;
+    font-size:40px;
+    font-weight:700;
+  }
+  .speed-unit { font-size:12px; color:var(--muted); }
+
+  input[type=range] {
+    -webkit-appearance:none;
+    width:100%;
+    height:6px;
+    border-radius:3px;
+    background: #1c1c2e;
+    outline:none;
+    margin-bottom:8px;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance:none;
+    width:26px; height:26px;
+    border-radius:50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    box-shadow: 0 0 10px rgba(124,106,247,0.5);
+    border:2px solid rgba(255,255,255,0.15);
+  }
+  .slider-labels {
+    display:flex;
+    justify-content:space-between;
+    font-size:10px;
+    color:var(--muted);
+    font-family:'Space Mono', monospace;
+    margin-bottom:16px;
+  }
+
+  .presets {
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:8px;
+    margin-bottom:16px;
+  }
+  .preset-btn {
+    background:#1c1c2e;
+    border:1px solid transparent;
+    border-radius:10px;
+    padding:9px 4px;
+    color:var(--muted);
+    font-family:'Space Mono', monospace;
+    font-size:12px;
+    text-align:center;
+  }
+  .preset-btn.active { border-color:var(--accent); color:var(--accent2); background:rgba(124,106,247,0.12); }
+
+  .custom-row {
+    display:flex;
+    align-items:center;
+    gap:10px;
+    background:#1c1c2e;
+    border-radius:12px;
+    padding:10px 14px;
+    margin-bottom:14px;
+  }
+  .custom-row label { font-size:13px; color:var(--muted); flex-shrink:0; }
+  .custom-row input {
+    background:none; border:none; color:var(--text);
+    font-family:'Space Mono', monospace; font-size:17px; font-weight:700;
+    width:100%; outline:none; text-align:right;
+  }
+  .custom-row .unit { font-size:12px; color:var(--muted); }
+
+  .limit-row {
+    display:flex; align-items:center; gap:12px;
+    background:#1c1c2e; border-radius:12px; padding:12px 14px;
+    margin-bottom:14px;
+  }
+  .limit-row label { font-size:13px; color:var(--muted); flex:1; }
+  .limit-row input[type=number] {
+    background:#13131c; border:1px solid var(--border); border-radius:8px;
+    color:var(--text); font-family:'Space Mono', monospace; font-size:15px;
+    width:70px; padding:6px; outline:none; text-align:center;
+  }
+  .toggle { position:relative; width:44px; height:26px; flex-shrink:0; }
+  .toggle input { opacity:0; width:0; height:0; }
+  .toggle-slider {
+    position:absolute; inset:0; background:#13131c; border-radius:13px;
+    border:1px solid var(--border);
+  }
+  .toggle-slider::after {
+    content:''; position:absolute; top:3px; left:3px;
+    width:18px; height:18px; border-radius:50%; background:var(--muted);
+    transition:0.3s;
+  }
+  .toggle input:checked + .toggle-slider { background:rgba(124,106,247,0.2); border-color:var(--accent); }
+  .toggle input:checked + .toggle-slider::after { transform:translateX(18px); background:var(--accent2); }
+
+  .close-panel {
+    width:100%;
+    padding:13px;
+    border-radius:14px;
+    border:1px solid var(--border);
+    background:transparent;
+    color:var(--text);
+    font-family:'Space Grotesk', sans-serif;
+    font-size:14px;
+    font-weight:600;
+  }
+  .close-panel:active { background:#1c1c2e; }
+</style>
+</head>
+<body>
+
+<div id="playfield">
+  <div class="empty-hint" id="emptyHint">
+    <div class="icon">👆</div>
+    <div class="txt">Touche l'écran pour placer<br>le point, puis glisse-le<br>où tu veux</div>
+  </div>
+
+  <div id="target">
+    <div class="ring pulse-ring"></div>
+    <div class="ring"></div>
+    <div class="core"></div>
+    <div class="target-hint">glisse-moi</div>
+  </div>
+</div>
+
+<div class="topbar">
+  <button class="main-btn start" id="mainBtn" onclick="toggleClicker()">
+    <span id="btnIcon">▶</span>
+    <span id="btnText">Démarrer</span>
+  </button>
+  <button class="settings-btn" onclick="openSettings()">⚙</button>
+</div>
+
+<div class="stats-pill" id="statsPill">
+  <span><b id="statTotal">0</b> clics</span>
+  <span class="divider">|</span>
+  <span><b id="statCPS">0.0</b>/s</span>
+  <span class="divider">|</span>
+  <span><b id="statMs">100</b>ms</span>
+</div>
+
+<div class="settings-overlay" id="settingsOverlay" onclick="closeSettings()"></div>
+<div class="settings-panel" id="settingsPanel">
+  <div class="panel-handle"></div>
+  <div class="panel-title">⏱ Vitesse du clic</div>
+  <div class="speed-display">
+    <div class="speed-num" id="speedDisplay">100</div>
+    <div class="speed-unit">millisecondes entre chaque clic</div>
+  </div>
+  <input type="range" id="speedSlider" min="50" max="5000" value="100" step="10">
+  <div class="slider-labels"><span>50ms (rapide)</span><span>5000ms (lent)</span></div>
+
+  <div class="presets">
+    <button class="preset-btn" data-ms="50">50ms</button>
+    <button class="preset-btn active" data-ms="100">100ms</button>
+    <button class="preset-btn" data-ms="500">500ms</button>
+    <button class="preset-btn" data-ms="1000">1000ms</button>
+  </div>
+
+  <div class="custom-row">
+    <label>Personnalisé</label>
+    <input type="number" id="customMs" min="1" max="60000" placeholder="100">
+    <span class="unit">ms</span>
+  </div>
+
+  <div class="limit-row">
+    <label>Limiter le nombre de clics</label>
+    <input type="number" id="limitInput" min="1" value="100">
+    <label class="toggle">
+      <input type="checkbox" id="limitToggle">
+      <span class="toggle-slider"></span>
+    </label>
+  </div>
+
+  <button class="close-panel" onclick="closeSettings()">Fermer</button>
+</div>
+
+<script>
+let isRunning = false;
+let intervalId = null;
+let statsInterval = null;
+let clickCount = 0;
+let startTime = null;
+let currentMs = 100;
+let targetX = null, targetY = null;
+let isDragging = false;
+let hasPlacedTarget = false;
+
+const playfield = document.getElementById('playfield');
+const target = document.getElementById('target');
+const emptyHint = document.getElementById('emptyHint');
+const mainBtn = document.getElementById('mainBtn');
+const btnIcon = document.getElementById('btnIcon');
+const btnText = document.getElementById('btnText');
+const statTotal = document.getElementById('statTotal');
+const statCPS = document.getElementById('statCPS');
+const statMs = document.getElementById('statMs');
+const speedSlider = document.getElementById('speedSlider');
+const speedDisplay = document.getElementById('speedDisplay');
+const customMs = document.getElementById('customMs');
+const limitToggle = document.getElementById('limitToggle');
+const limitInput = document.getElementById('limitInput');
+const settingsPanel = document.getElementById('settingsPanel');
+const settingsOverlay = document.getElementById('settingsOverlay');
+
+target.style.display = 'none';
+
+playfield.addEventListener('pointerdown', (e) => {
+  if (e.target.closest('#target')) return;
+  placeTarget(e.clientX, e.clientY);
+}, { passive: true });
+
+function placeTarget(x, y) {
+  targetX = x;
+  targetY = y;
+  target.style.left = x + 'px';
+  target.style.top = y + 'px';
+  target.style.display = 'flex';
+  emptyHint.style.display = 'none';
+  hasPlacedTarget = true;
+}
+
+target.addEventListener('pointerdown', (e) => {
+  e.stopPropagation();
+  isDragging = true;
+  target.classList.add('dragging');
+  target.setPointerCapture(e.pointerId);
+});
+
+target.addEventListener('pointermove', (e) => {
+  if (!isDragging) return;
+  targetX = e.clientX;
+  targetY = e.clientY;
+  target.style.left = targetX + 'px';
+  target.style.top = targetY + 'px';
+});
+
+target.addEventListener('pointerup', (e) => {
+  isDragging = false;
+  target.classList.remove('dragging');
+});
+target.addEventListener('pointercancel', () => {
+  isDragging = false;
+  target.classList.remove('dragging');
+});
+
+speedSlider.addEventListener('input', () => {
+  currentMs = parseInt(speedSlider.value);
+  speedDisplay.textContent = currentMs;
+  customMs.value = currentMs;
+  statMs.textContent = currentMs;
+  updatePresets();
+  if (isRunning) restartLoop();
+});
+
+customMs.addEventListener('input', () => {
+  let v = parseInt(customMs.value);
+  if (!isNaN(v) && v >= 1) {
+    currentMs = Math.min(v, 60000);
+    speedSlider.value = Math.min(currentMs, 5000);
+    speedDisplay.textContent = currentMs;
+    statMs.textContent = currentMs;
+    updatePresets();
+    if (isRunning) restartLoop();
+  }
+});
+
+document.querySelectorAll('.preset-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    currentMs = parseInt(btn.dataset.ms);
+    speedSlider.value = currentMs;
+    speedDisplay.textContent = currentMs;
+    customMs.value = currentMs;
+    statMs.textContent = currentMs;
+    updatePresets(btn);
+    if (isRunning) restartLoop();
+  });
+});
+
+function updatePresets(activeBtn) {
+  document.querySelectorAll('.preset-btn').forEach(b => {
+    b.classList.toggle('active', b === activeBtn || parseInt(b.dataset.ms) === currentMs);
+  });
+}
+
+function openSettings() {
+  settingsPanel.classList.add('open');
+  settingsOverlay.classList.add('open');
+}
+function closeSettings() {
+  settingsPanel.classList.remove('open');
+  settingsOverlay.classList.remove('open');
+}
+
+function toggleClicker() {
+  if (isRunning) stopClicker();
+  else startClicker();
+}
+
+function startClicker() {
+  if (!hasPlacedTarget) {
+    placeTarget(window.innerWidth / 2, window.innerHeight / 2);
+  }
+
+  isRunning = true;
+  clickCount = 0;
+  startTime = Date.now();
+
+  mainBtn.className = 'main-btn stop';
+  btnIcon.innerHTML = '<span class="pulse-dot"></span>';
+  btnText.textContent = 'Arrêter';
+
+  const limit = limitToggle.checked ? parseInt(limitInput.value) : Infinity;
+
+  intervalId = setInterval(() => {
+    doClick();
+    if (clickCount >= limit) stopClicker();
+  }, currentMs);
+
+  statsInterval = setInterval(updateStats, 200);
+}
+
+function stopClicker() {
+  clearInterval(intervalId);
+  clearInterval(statsInterval);
+  intervalId = null;
+  statsInterval = null;
+  isRunning = false;
+
+  mainBtn.className = 'main-btn start';
+  btnIcon.textContent = '▶';
+  btnText.textContent = 'Démarrer';
+}
+
+function restartLoop() {
+  clearInterval(intervalId);
+  const limit = limitToggle.checked ? parseInt(limitInput.value) : Infinity;
+  intervalId = setInterval(() => {
+    doClick();
+    if (clickCount >= limit) stopClicker();
+  }, currentMs);
+}
+
+function doClick() {
+  clickCount++;
+  statTotal.textContent = clickCount;
+
+  const ripple = document.createElement('div');
+  ripple.className = 'ripple';
+  ripple.style.left = targetX + 'px';
+  ripple.style.top = targetY + 'px';
+  playfield.appendChild(ripple);
+  setTimeout(() => ripple.remove(), 500);
+}
+
+function updateStats() {
+  const elapsed = (Date.now() - startTime) / 1000;
+  statCPS.textContent = elapsed > 0 ? (clickCount / elapsed).toFixed(1) : '0.0';
+}
+</script>
+</body>
+</html>
